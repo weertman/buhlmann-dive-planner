@@ -1711,8 +1711,7 @@
                         currentPressure = Math.max(0, currentPressure - gasUsed);
                     } else {
                         // Imperial: SAC is in psi/min at surface
-                        const depthInFeet = metersToFeet(depth);
-                        const depthPressure = 1 + (depthInFeet / 33); // Absolute pressure in ATM
+                        const depthPressure = 1 + (depth / 33); // Absolute pressure in ATM
                         const gasUsed = sacRate * depthPressure * timeStep;
                         currentPressure = Math.max(0, currentPressure - gasUsed);
                     }
@@ -1950,8 +1949,12 @@
                 depthFactor = 1 + lastPoint.depth / 10;
                 consumptionRate = sacRate * depthFactor;
             } else {
-                depthFactor = 1 + lastPoint.depth / 33;
+                const depthInFeet = metersToFeet(lastPoint.depth);
+                depthFactor = 1 + depthInFeet / 33;
                 consumptionRate = sacRate * depthFactor;
+                
+                // Verify calculation
+                console.log(`Live display - Depth: ${depthInFeet.toFixed(1)}ft, Factor: ${depthFactor.toFixed(2)}x, Rate: ${consumptionRate.toFixed(1)} psi/min`);
             }
             
             // Calculate time to reserve at current depth
@@ -2317,7 +2320,8 @@
                         depthFactor = 1 + point.depth / 10;
                         consumptionRate = sacRate * depthFactor;
                     } else {
-                        depthFactor = 1 + point.depth / 33;
+                        const depthInFeet = metersToFeet(point.depth);
+                        depthFactor = 1 + depthInFeet / 33;
                         consumptionRate = sacRate * depthFactor;
                     }
                     
