@@ -1,0 +1,2421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Bühlmann Dive Planner with Gas Tracking</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0f1c;
+            color: #e0e0e0;
+            line-height: 1.6;
+            padding: 15px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        
+        h1 {
+            color: #4a9eff;
+            margin-bottom: 8px;
+            font-size: 1.8em;
+        }
+        
+        .warning {
+            background: #ff4444;
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .main-layout {
+            display: grid;
+            grid-template-columns: minmax(500px, 700px) 320px;
+            gap: 15px;
+            margin-bottom: 15px;
+            justify-content: center;
+        }
+        
+        .canvas-container {
+            background: #1a2332;
+            border-radius: 10px;
+            padding: 15px;
+            position: relative;
+        }
+        
+        #diveCanvas {
+            background: #0a0f1c;
+            border: 2px solid #2a3a4a;
+            border-radius: 5px;
+            cursor: crosshair;
+            width: 100%;
+            height: 320px;
+            display: block;
+        }
+        
+        .canvas-controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .panel {
+            background: #1a2332;
+            border-radius: 10px;
+            padding: 15px;
+        }
+        
+        .panel h2 {
+            color: #4a9eff;
+            font-size: 1.1em;
+            margin-bottom: 12px;
+        }
+        
+        button {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #357abd;
+        }
+        
+        button:disabled {
+            background: #333;
+            cursor: not-allowed;
+        }
+        
+        button.danger {
+            background: #ff4444;
+        }
+        
+        button.danger:hover {
+            background: #cc3333;
+        }
+        
+        .control-group {
+            margin-bottom: 12px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 4px;
+            color: #4a9eff;
+            font-weight: 500;
+            font-size: 13px;
+        }
+        
+        select, input[type="number"] {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background: #0a0f1c;
+            color: #e0e0e0;
+            font-size: 13px;
+        }
+        
+        .tissue-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 4px;
+            margin-top: 8px;
+        }
+        
+        .tissue-cell {
+            background: #0a0f1c;
+            border-radius: 3px;
+            padding: 4px;
+            text-align: center;
+            font-size: 10px;
+            position: relative;
+            overflow: hidden;
+            min-height: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.3s;
+            border: 1px solid transparent;
+        }
+        
+        .tissue-cell[data-category="fast"] {
+            border-color: #ff6b6b;
+        }
+        
+        .tissue-cell[data-category="medium-fast"] {
+            border-color: #ffa94d;
+        }
+        
+        .tissue-cell[data-category="medium"] {
+            border-color: #74c0fc;
+        }
+        
+        .tissue-cell[data-category="medium-slow"] {
+            border-color: #63e6be;
+        }
+        
+        .tissue-cell[data-category="slow"] {
+            border-color: #b197fc;
+        }
+        
+        .tissue-cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 8px rgba(74, 158, 255, 0.3);
+        }
+        
+        @keyframes pulse {
+            0% { 
+                box-shadow: 0 0 8px rgba(74, 158, 255, 0.8);
+                border-color: rgba(74, 158, 255, 0.8);
+            }
+            50% { 
+                box-shadow: 0 0 16px rgba(74, 158, 255, 1);
+                border-color: rgba(74, 158, 255, 1);
+            }
+            100% { 
+                box-shadow: 0 0 8px rgba(74, 158, 255, 0.8);
+                border-color: rgba(74, 158, 255, 0.8);
+            }
+        }
+        
+        .tissue-cell.leading {
+            animation: pulse 2s infinite;
+            border-width: 2px;
+        }
+        
+        .tissue-fill {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, #4a9eff, #ff4444);
+            transition: height 0.3s ease;
+            z-index: 1;
+        }
+        
+        .tissue-text {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .tissue-name {
+            font-size: 8px;
+            color: #4a9eff;
+            margin-top: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .results-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .result-item {
+            background: #0a0f1c;
+            padding: 8px;
+            border-radius: 5px;
+        }
+        
+        .result-label {
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .result-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #4a9eff;
+        }
+        
+        .result-value.warning {
+            color: #ffaa4a;
+        }
+        
+        .result-value.danger {
+            color: #ff4444;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 4px;
+        }
+        
+        .status-safe { background: #4aff4a; }
+        .status-caution { background: #ffaa4a; }
+        .status-danger { background: #ff4444; }
+        
+        .instructions {
+            background: #2a3a4a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        
+        .template-buttons {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+        
+        .template-buttons button {
+            font-size: 11px;
+            padding: 5px 6px;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 12px;
+            margin-top: 8px;
+            font-size: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            white-space: nowrap;
+        }
+        
+        .legend-line {
+            width: 16px;
+            height: 2px;
+            border-radius: 1px;
+        }
+        
+        .tissue-info-modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a2332;
+            border: 2px solid #4a9eff;
+            border-radius: 10px;
+            padding: 20px;
+            z-index: 1000;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            animation: modalAppear 0.3s ease-out;
+        }
+        
+        @keyframes modalAppear {
+            from {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1);
+            }
+        }
+        
+        .tissue-info-modal h3 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+        
+        .tissue-info-modal h4 {
+            color: #ffaa4a;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .tissue-info-modal p {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        
+        .tissue-info-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #ff4444;
+            color: white;
+            border: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .tissue-info-close:hover {
+            background: #cc3333;
+        }
+        
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+        }
+        
+        .gas-settings {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .gas-status {
+            background: #0a0f1c;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 13px;
+        }
+        
+        .gas-status-item {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        
+        .instructions-panel {
+            background: #1a2332;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .instructions-panel h2 {
+            color: #4a9eff;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+        }
+        
+        .instructions-section {
+            margin-bottom: 20px;
+        }
+        
+        .instructions-section h3 {
+            color: #ffaa4a;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+        
+        .instructions-section ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        
+        .instructions-section li {
+            margin-bottom: 5px;
+            position: relative;
+        }
+        
+        .instructions-section li:before {
+            content: "▸";
+            position: absolute;
+            left: -15px;
+            color: #4a9eff;
+        }
+        
+        @media (max-width: 900px) {
+            .main-layout {
+                grid-template-columns: 1fr;
+                max-width: 700px;
+                margin: 0 auto;
+            }
+            
+            .sidebar {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 15px;
+                max-width: 700px;
+                margin: 0 auto;
+            }
+            
+            #algorithmPanel {
+                grid-column: 1 / -1;
+            }
+        }
+        
+        .algorithm-section {
+            margin-bottom: 20px;
+            padding: 12px;
+            background: #0a0f1c;
+            border-radius: 5px;
+            border: 1px solid #2a3a4a;
+        }
+        
+        .algorithm-section h3 {
+            color: #ffaa4a;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        
+        .equation {
+            background: #1a2332;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-family: 'Times New Roman', serif;
+            font-size: 16px;
+            margin-bottom: 10px;
+            border: 1px solid #4a9eff;
+        }
+        
+        .equation sub {
+            font-size: 0.7em;
+            vertical-align: sub;
+        }
+        
+        .equation sup {
+            font-size: 0.7em;
+            vertical-align: super;
+        }
+        
+        .equation-params {
+            display: grid;
+            gap: 6px;
+            font-size: 12px;
+        }
+        
+        .param-item {
+            display: grid;
+            grid-template-columns: 100px 80px 1fr;
+            align-items: center;
+            gap: 8px;
+            padding: 4px;
+            background: #1a2332;
+            border-radius: 3px;
+        }
+        
+        .param-label {
+            color: #4a9eff;
+            font-weight: 500;
+            text-align: right;
+        }
+        
+        .param-label sub {
+            font-size: 0.7em;
+            vertical-align: sub;
+        }
+        
+        .param-value {
+            color: #4aff4a;
+            font-weight: bold;
+            font-family: monospace;
+            text-align: center;
+        }
+        
+        .param-desc {
+            color: #888;
+            font-size: 10px;
+        }
+        
+        .param-desc sub {
+            font-size: 0.7em;
+            vertical-align: sub;
+        }
+        
+        .state-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        .state-item {
+            background: #1a2332;
+            padding: 8px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .state-label {
+            color: #4a9eff;
+            font-size: 12px;
+        }
+        
+        .state-label sub {
+            font-size: 0.7em;
+            vertical-align: sub;
+        }
+        
+        .state-value {
+            color: #ffaa4a;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        #algorithmPanel h2 {
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        #algorithmPanel h2:hover {
+            color: #6abfff;
+        }
+        
+        #algorithmContent {
+            transition: max-height 0.3s ease;
+            overflow: hidden;
+            max-height: 2000px;
+        }
+        
+        #algorithmContent.collapsed {
+            max-height: 0;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            .sidebar {
+                grid-template-columns: 1fr;
+            }
+            
+            #algorithmPanel {
+                grid-column: 1;
+            }
+            
+            .template-buttons {
+                grid-template-columns: 1fr 1fr;
+            }
+            
+            .tissue-info-modal {
+                width: 95%;
+                max-width: 95%;
+                padding: 15px;
+                margin: 10px;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+            }
+            
+            .tissue-info-modal h3 {
+                font-size: 16px;
+            }
+            
+            .tissue-info-modal h4 {
+                font-size: 13px;
+            }
+            
+            .tissue-info-modal p {
+                font-size: 12px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .tissue-info-modal {
+                width: calc(100% - 20px);
+                max-width: calc(100% - 20px);
+                padding: 12px;
+                margin: 10px;
+            }
+            
+            .tissue-info-close {
+                width: 20px;
+                height: 20px;
+                font-size: 14px;
+                top: 8px;
+                right: 8px;
+            }
+            
+            .tissue-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 3px;
+            }
+            
+            .tissue-cell {
+                min-height: 45px;
+                padding: 3px;
+                font-size: 9px;
+            }
+            
+            .tissue-name {
+                font-size: 7px;
+            }
+            
+            .param-item {
+                grid-template-columns: 80px 60px 1fr;
+                font-size: 11px;
+            }
+            
+            .equation {
+                font-size: 14px;
+                padding: 8px;
+            }
+            
+            .state-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .algorithm-section {
+                padding: 8px;
+            }
+            
+            .algorithm-section h3 {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Interactive Bühlmann Dive Planner with Gas Tracking</h1>
+            <div class="warning">
+                ⚠️ EDUCATIONAL TOOL ONLY - Never use for actual dive planning! Always use certified dive computers and proper training.
+            </div>
+        </header>
+
+        <div class="main-layout">
+            <div class="canvas-container">
+                <div class="instructions">
+                    <strong>Draw your dive:</strong> Click to add waypoints • Red line = decompression ceiling (stay below!) • Blue line = gas pressure (right Y-axis) • Real-time calculations
+                </div>
+                
+                <canvas id="diveCanvas"></canvas>
+                
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-line" style="background: #4aff4a;"></div>
+                        <span>Dive Profile (depth)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line" style="background: #ff4444;"></div>
+                        <span>Deco Ceiling (depth)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line" style="background: #4a9eff; background-image: linear-gradient(to right, #4a9eff 60%, transparent 60%); background-size: 8px 2px;"></div>
+                        <span>Gas Pressure (right axis)</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-line" style="background: #ffaa4a;"></div>
+                        <span>Safety Zone</span>
+                    </div>
+                </div>
+                
+                <div class="canvas-controls">
+                    <button id="clearBtn">Clear Profile</button>
+                    <button id="undoBtn">Undo Last Point</button>
+                    <button id="playbackBtn">▶ Playback Dive</button>
+                    <button id="drawModeBtn">Drawing Mode: Click</button>
+                    <button id="autoScaleBtn">Auto Scale</button>
+                    <button id="resetScaleBtn">Reset Zoom</button>
+                </div>
+                
+                <div class="template-buttons">
+                    <button id="squareBtn" title="18m/60ft for 35 minutes - typical reef dive">Reef Dive</button>
+                    <button id="multilevelBtn" title="25m → 18m → 12m progressive ascent">Multi-level</button>
+                    <button id="sawtoothBtn" title="Not recommended - shows why to avoid yo-yo profiles">Bad Profile</button>
+                    <button id="bounceBtn" title="30m/100ft with proper multi-level ascent">Deep Dive</button>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="panel">
+                    <h2>Dive Settings</h2>
+                    <div class="control-group">
+                        <label for="units">Unit System:</label>
+                        <select id="units">
+                            <option value="metric">Metric (m/bar)</option>
+                            <option value="imperial">Imperial (ft/psi)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="gasSelect">Breathing Gas:</label>
+                        <select id="gasSelect">
+                            <option value="air">Air (21% O₂)</option>
+                            <option value="ean32">EAN32 (32% O₂)</option>
+                            <option value="ean36">EAN36 (36% O₂)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="altitude">Altitude:</label>
+                        <select id="altitude">
+                            <option value="0">Sea Level</option>
+                            <option value="1">Low (700-1500m)</option>
+                            <option value="2">Moderate (1500-2400m)</option>
+                            <option value="3">High (2400-4000m)</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="conservatism">Conservatism:</label>
+                        <select id="conservatism">
+                            <option value="1.0">Normal</option>
+                            <option value="0.9">Conservative</option>
+                            <option value="0.8">Very Conservative</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h2>Gas Management</h2>
+                    <div class="gas-settings">
+                        <div class="control-group">
+                            <label for="sacRate">SAC Rate:</label>
+                            <input type="number" id="sacRate" value="20" min="10" max="40" step="1">
+                        </div>
+                        <div class="control-group">
+                            <label for="tankSelect">Tank:</label>
+                            <select id="tankSelect">
+                                <option value="al80">Aluminum 80</option>
+                                <option value="hp100">HP Steel 100</option>
+                                <option value="hp117">HP Steel 117</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="startPressure">Start Pressure:</label>
+                            <input type="number" id="startPressure" value="3000" min="2000" max="3500" step="50">
+                        </div>
+                        <div class="control-group">
+                            <label for="reservePressure">Reserve:</label>
+                            <input type="number" id="reservePressure" value="500" min="300" max="1000" step="50">
+                        </div>
+                    </div>
+                    <div class="gas-status" id="gasStatus">
+                        <div class="gas-status-item">
+                            <span>Current Pressure:</span>
+                            <span id="currentPressure">3000 psi</span>
+                        </div>
+                        <div class="gas-status-item">
+                            <span>Turn Pressure:</span>
+                            <span id="turnPressure">2000 psi</span>
+                        </div>
+                        <div class="gas-status-item">
+                            <span>Gas Used:</span>
+                            <span id="gasUsed">0 psi</span>
+                        </div>
+                        <div class="gas-status-item">
+                            <span>Consumption Rate:</span>
+                            <span id="consumptionRate">-- /min</span>
+                        </div>
+                        <div class="gas-status-item">
+                            <span>Time to Reserve:</span>
+                            <span id="timeToReserve">-- min</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h2>Dive Analysis</h2>
+                    <div class="results-grid">
+                        <div class="result-item">
+                            <div class="result-label">Max Depth</div>
+                            <div class="result-value" id="maxDepth">0m</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">Dive Time</div>
+                            <div class="result-value" id="diveTime">0 min</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">Deco Time</div>
+                            <div class="result-value" id="decoTime">0 min</div>
+                        </div>
+                        <div class="result-item">
+                            <div class="result-label">CNS %</div>
+                            <div class="result-value" id="cnsPercent">0%</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 12px; font-size: 13px;">
+                        <span class="status-indicator" id="statusIndicator"></span>
+                        <span id="statusText">Ready to draw</span>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h2 title="Click any tissue compartment to learn about its biological representation">Tissue Loading <span style="font-size: 10px; color: #888;">(click for info)</span></h2>
+                    <div id="leadingTissue" style="margin-bottom: 8px; font-size: 13px;">
+                        Leading: <span style="color: #4a9eff;">None</span>
+                    </div>
+                    <div class="tissue-grid" id="tissueGrid"></div>
+                    <div style="margin-top: 8px; font-size: 9px; line-height: 1.4;">
+                        <div style="display: flex; align-items: center; gap: 4px; margin: 2px 0;">
+                            <span style="width: 12px; height: 2px; background: #ff6b6b;"></span>
+                            <span style="color: #888;">Fast (Blood/Brain)</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px; margin: 2px 0;">
+                            <span style="width: 12px; height: 2px; background: #ffa94d;"></span>
+                            <span style="color: #888;">Med-Fast (Organs)</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px; margin: 2px 0;">
+                            <span style="width: 12px; height: 2px; background: #74c0fc;"></span>
+                            <span style="color: #888;">Medium (Muscle)</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px; margin: 2px 0;">
+                            <span style="width: 12px; height: 2px; background: #63e6be;"></span>
+                            <span style="color: #888;">Med-Slow (Fat)</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 4px; margin: 2px 0;">
+                            <span style="width: 12px; height: 2px; background: #b197fc;"></span>
+                            <span style="color: #888;">Slow (Bone)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="panel" id="algorithmPanel">
+                <h2 title="Click to expand/collapse">Bühlmann Algorithm & Calculations <span style="font-size: 10px; color: #888;">▼</span></h2>
+                <div id="algorithmContent">
+                    <div class="algorithm-section">
+                        <h3>Tissue Loading Equation (Schreiner/Haldane)</h3>
+                        <div class="equation">
+                            P<sub>tissue</sub>(t) = P<sub>alv</sub> + (P<sub>0</sub> - P<sub>alv</sub>) × e<sup>-k×t</sup>
+                        </div>
+                        <div class="equation-params">
+                            <div class="param-item">
+                                <span class="param-label">k =</span>
+                                <span class="param-value" id="k-value">--</span>
+                                <span class="param-desc">(rate constant = ln(2) / t<sub>½</sub>)</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">P<sub>alv</sub> =</span>
+                                <span class="param-value" id="p-inspired">--</span>
+                                <span class="param-desc">(alveolar N₂ pressure)</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">P<sub>tissue</sub> =</span>
+                                <span class="param-value" id="p-tissue">--</span>
+                                <span class="param-desc">(current tissue tension)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="algorithm-section">
+                        <h3>M-Value Calculation</h3>
+                        <div class="equation">
+                            M-value = a + P<sub>ambient</sub> / b
+                        </div>
+                        <div class="equation-params">
+                            <div class="param-item">
+                                <span class="param-label">Leading Tissue:</span>
+                                <span class="param-value" id="algo-leading-tissue">--</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">a =</span>
+                                <span class="param-value" id="a-value">--</span>
+                                <span class="param-desc">(slope coefficient)</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">b =</span>
+                                <span class="param-value" id="b-value">--</span>
+                                <span class="param-desc">(intercept in bar)</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">M-value =</span>
+                                <span class="param-value" id="m-value">--</span>
+                                <span class="param-desc">(tolerated overpressure)</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">GF Applied:</span>
+                                <span class="param-value" id="gf-value">--</span>
+                                <span class="param-desc">(conservatism factor)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="algorithm-section">
+                        <h3>Ceiling Depth Calculation</h3>
+                        <div class="equation">
+                            Ceiling = ((P<sub>tissue</sub> - a) × b - P<sub>surface</sub>) × 10
+                        </div>
+                        <div class="equation-params">
+                            <div class="param-item">
+                                <span class="param-label">P<sub>surface</sub> =</span>
+                                <span class="param-value" id="p-surface">--</span>
+                                <span class="param-desc">(surface pressure)</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">Ceiling =</span>
+                                <span class="param-value" id="ceiling-calc">--</span>
+                                <span class="param-desc">(minimum safe depth)</span>
+                            </div>
+                            <div class="param-item">
+                                <span class="param-label">Safety Margin:</span>
+                                <span class="param-value" id="safety-margin">--</span>
+                                <span class="param-desc">(depth - ceiling)</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="algorithm-section">
+                        <h3>Current Dive State</h3>
+                        <div class="state-grid">
+                            <div class="state-item">
+                                <span class="state-label">Depth:</span>
+                                <span class="state-value" id="current-depth">0m</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="state-label">Time:</span>
+                                <span class="state-value" id="current-time">0 min</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="state-label">P<sub>ambient</sub>:</span>
+                                <span class="state-value" id="p-ambient">1.0 bar</span>
+                            </div>
+                            <div class="state-item">
+                                <span class="state-label">Loading %:</span>
+                                <span class="state-value" id="loading-percent">79%</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 12px; padding: 10px; background: #0a0f1c; border-radius: 5px; font-size: 11px; color: #888;">
+                        <strong style="color: #4a9eff;">Understanding the Math:</strong><br>
+                        • <strong>Tissue Loading:</strong> How nitrogen accumulates in body tissues over time<br>
+                        • <strong>M-Value:</strong> Maximum tissue pressure allowed at a given ambient pressure<br>
+                        • <strong>Ceiling:</strong> Shallowest depth you can ascend to without exceeding M-values<br>
+                        • <strong>k-constant:</strong> How quickly a tissue loads/unloads (faster tissues = higher k)<br>
+                        • <strong>Initial State:</strong> Tissues start at 0.79 bar N₂ (air at sea level)<br>
+                        • All calculations update in real-time as you draw your dive profile
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="instructions-panel">
+            <h2>How to Use the Dive Planner</h2>
+            
+            <div class="instructions-section">
+                <h3>🎯 Quick Start</h3>
+                <ul>
+                    <li><strong>Click Mode:</strong> Click points to create your dive profile waypoints</li>
+                    <li><strong>Drag Mode:</strong> Click and drag to draw a smooth dive profile</li>
+                    <li><strong>Templates:</strong> Use preset profiles designed for AL80 tank with 20 psi/min SAC</li>
+                    <li><strong>Auto Scale:</strong> Zoom to fit your dive profile perfectly</li>
+                    <li><strong>Gas Planning:</strong> Templates leave proper reserve (500-700 psi)</li>
+                </ul>
+            </div>
+            
+            <div class="instructions-section">
+                <h3>📊 Understanding the Display</h3>
+                <ul>
+                    <li><strong>Green Line:</strong> Your planned dive profile (depth on left axis)</li>
+                    <li><strong>Red Line:</strong> Decompression ceiling - NEVER ascend above this!</li>
+                    <li><strong>Blue Dashed Line:</strong> Tank pressure remaining (pressure on right axis)</li>
+                    <li><strong>Orange Zone:</strong> Safety stop area (5m/15ft)</li>
+                    <li><strong>Grid:</strong> Time (horizontal) vs Depth (left) vs Pressure (right)</li>
+                    <li><strong>Dual Y-Axes:</strong> Left shows depth, right shows gas pressure</li>
+                </ul>
+            </div>
+            
+            <div class="instructions-section">
+                <h3>🎛️ Settings Explained</h3>
+                <ul>
+                    <li><strong>Gas Mix:</strong> Choose Air, EAN32, or EAN36 based on your certification</li>
+                    <li><strong>Altitude:</strong> Adjusts for diving at elevation (lakes, etc.)</li>
+                    <li><strong>Conservatism:</strong> Adds safety margin to calculations</li>
+                    <li><strong>SAC Rate:</strong> Your Surface Air Consumption in psi/min or bar/min</li>
+                    <li><strong>Tank Size:</strong> Select your cylinder capacity</li>
+                </ul>
+            </div>
+            
+            <div class="instructions-section">
+                <h3>🫁 Gas Management</h3>
+                <ul>
+                    <li><strong>SAC Rate:</strong> Surface Air Consumption - your breathing rate at 1 ATM</li>
+                    <li><strong>Depth Factor:</strong> Gas consumption = SAC × (1 + Depth/33ft) or SAC × (1 + Depth/10m)</li>
+                    <li><strong>Example:</strong> At 66ft/20m with 20 psi/min SAC = 60 psi/min consumption</li>
+                    <li><strong>Turn Pressure:</strong> When to begin your ascent (Rule of Thirds)</li>
+                    <li><strong>Reserve:</strong> Emergency gas supply (typically 500-700 psi / 35-50 bar)</li>
+                    <li><strong>Time to Reserve:</strong> Minutes until reserve at current depth and consumption</li>
+                    <li><strong>SAC Adjustment:</strong> Increase for cold water, current, stress, or exertion</li>
+                </ul>
+            </div>
+            
+            <div class="instructions-section">
+                <h3>🧬 Tissue Loading</h3>
+                <ul>
+                    <li><strong>Click tissues</strong> to see biological information</li>
+                    <li><strong>Percentage:</strong> Loading relative to M-value (100% = at limit)</li>
+                    <li><strong>Leading Tissue:</strong> The compartment controlling your ascent</li>
+                    <li><strong>Colors:</strong> Border colors indicate tissue speed category</li>
+                </ul>
+            </div>
+            
+            <div class="instructions-section">
+                <h3>⚠️ Safety Reminders</h3>
+                <ul>
+                    <li>This tool is for EDUCATION ONLY - not for dive planning</li>
+                    <li>Always use certified dive computers and tables</li>
+                    <li>Plan conservatively and within your training</li>
+                    <li>Consider factors not modeled: cold, exertion, health</li>
+                    <li>Always perform safety stops even when not required</li>
+                    <li>Never dive alone - use the buddy system</li>
+                </ul>
+            </div>
+            
+            <div class="instructions-section">
+                <h3>💡 Pro Tips</h3>
+                <ul>
+                    <li>Avoid saw-tooth profiles - they increase DCS risk and waste gas</li>
+                    <li>Make your deepest dive first when doing multiple dives</li>
+                    <li>Slow ascents are safer - never exceed 9m/30ft per minute</li>
+                    <li>Stay well hydrated before and after diving</li>
+                    <li>Allow longer surface intervals when possible</li>
+                    <li>The template profiles are designed for AL80 tanks with average SAC rates</li>
+                    <li>Always plan to surface with 500-700 psi (35-50 bar) reserve</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Tissue Info Modal -->
+        <div class="modal-overlay" id="modalOverlay"></div>
+        <div class="tissue-info-modal" id="tissueInfoModal">
+            <button class="tissue-info-close" id="closeModal">&times;</button>
+            <h3 id="tissueModalTitle">Tissue Information</h3>
+            <h4>Compartment Details:</h4>
+            <p id="tissueModalCompartment"></p>
+            <h4>Current Loading:</h4>
+            <p id="tissueModalLoading"></p>
+            <h4>Biological Representation:</h4>
+            <p id="tissueModalDescription"></p>
+            <h4>Diving Considerations:</h4>
+            <p id="tissueModalConcerns"></p>
+        </div>
+    </div>
+
+    <script>
+        // Bühlmann ZH-L16C tissue compartments with biological classifications
+        const tissues = [
+            { halfTime: 2.65, a: 1.2599, b: 0.5050, name: "Blood/Brain", category: "fast" },
+            { halfTime: 5.0, a: 1.0000, b: 0.6514, name: "Blood/CNS", category: "fast" },
+            { halfTime: 8.0, a: 0.8618, b: 0.7222, name: "Brain/Organs", category: "fast" },
+            { halfTime: 12.5, a: 0.7562, b: 0.7825, name: "Heart/Liver", category: "medium-fast" },
+            { halfTime: 18.5, a: 0.6667, b: 0.8126, name: "Kidneys/Muscle", category: "medium-fast" },
+            { halfTime: 27.0, a: 0.5933, b: 0.8434, name: "Active Muscle", category: "medium-fast" },
+            { halfTime: 38.3, a: 0.5282, b: 0.8693, name: "Skin/Muscle", category: "medium" },
+            { halfTime: 54.3, a: 0.4701, b: 0.8910, name: "Resting Muscle", category: "medium" },
+            { halfTime: 77.0, a: 0.4187, b: 0.9092, name: "Red Marrow", category: "medium" },
+            { halfTime: 109.0, a: 0.3747, b: 0.9222, name: "Fat/Lymph", category: "medium-slow" },
+            { halfTime: 146.0, a: 0.3487, b: 0.9319, name: "Fat Tissue", category: "medium-slow" },
+            { halfTime: 187.0, a: 0.3223, b: 0.9403, name: "White Marrow", category: "medium-slow" },
+            { halfTime: 239.0, a: 0.2971, b: 0.9477, name: "Joints", category: "medium-slow" },
+            { halfTime: 305.0, a: 0.2737, b: 0.9544, name: "Bones", category: "slow" },
+            { halfTime: 390.0, a: 0.2523, b: 0.9602, name: "Cartilage", category: "slow" },
+            { halfTime: 635.0, a: 0.2164, b: 0.9653, name: "Tendons", category: "slow" }
+        ];
+        
+        // Tissue information descriptions
+        const tissueInfo = {
+            "fast": {
+                title: "Fast Tissues (2.65-8 min)",
+                description: "Highly perfused tissues with rich blood supply including blood, brain, spinal cord, and vital organs. These tissues on-gas and off-gas very quickly, making them critical during rapid depth changes. They contain mostly water-based tissues.",
+                concerns: "Most important during ascent from deep dives and for preventing arterial gas embolism. Control initial ascent rates and immediate decompression requirements."
+            },
+            "medium-fast": {
+                title: "Medium-Fast Tissues (12.5-27 min)",
+                description: "Well-vascularized tissues including heart, liver, kidneys, and exercising muscles. These control most recreational no-decompression limits. Mix of water and lipid-based tissues.",
+                concerns: "Often the 'leading' tissues for typical recreational dive profiles. The 27-minute compartment frequently controls NDLs on single dives."
+            },
+            "medium": {
+                title: "Medium Tissues (38.3-77 min)",
+                description: "Moderately perfused tissues including skin, resting muscles, and red bone marrow. Important for longer recreational dives. Contains both aqueous and fatty components.",
+                concerns: "Become significant on dives longer than 30-40 minutes or repetitive dives. Can become controlling tissues on second or third dives of the day."
+            },
+            "medium-slow": {
+                title: "Medium-Slow Tissues (109-239 min)",
+                description: "Poorly perfused tissues including fat, white bone marrow, lymphatic system, and joint capsules. Fat holds 5x more nitrogen than water-based tissues at the same pressure, making these slow to saturate but also slow to release gas.",
+                concerns: "Critical for repetitive diving, multi-day diving, and why we need surface intervals. Can contribute to 'undeserved' DCS hits, especially in divers with higher body fat percentage."
+            },
+            "slow": {
+                title: "Slow Tissues (305-635 min)",
+                description: "Very poorly perfused tissues including bones, cartilage, tendons, and ligaments. Can take days to fully desaturate. Minimal blood flow means extremely slow gas exchange.",
+                concerns: "Important for saturation diving and can contribute to 'unexplained' DCS hits after heavy diving weeks. May still be off-gassing nitrogen days after diving. The 635-minute compartment takes over 2 days to reach 95% desaturation."
+            }
+        };
+        
+        // Tank specifications
+        const tankSpecs = {
+            'al80': { 
+                name: 'Aluminum 80', 
+                volume: 77.4,
+                workingPressure: 3000,
+                metricVolume: 11.1,
+                metricPressure: 207
+            },
+            'hp100': { 
+                name: 'HP Steel 100', 
+                volume: 100,
+                workingPressure: 3442,
+                metricVolume: 12.9,
+                metricPressure: 237
+            },
+            'hp117': { 
+                name: 'HP Steel 117', 
+                volume: 117,
+                workingPressure: 3442,
+                metricVolume: 15.1,
+                metricPressure: 237
+            }
+        };
+        
+        // Global state
+        let canvas, ctx;
+        let currentUnits = 'metric';
+        let divePoints = [];
+        let diveProfile = [];
+        let tissueLoadings = new Array(16).fill(0.79);
+        let drawMode = 'click';
+        let isDrawing = false;
+        let playbackInterval = null;
+        let playbackIndex = 0;
+        let currentScale = { maxDepth: 50, maxTime: 120 };
+        let gasPressureProfile = [];
+        
+        // Unit conversion functions
+        function metersToFeet(meters) {
+            return meters * 3.28084;
+        }
+        
+        function feetToMeters(feet) {
+            return feet / 3.28084;
+        }
+        
+        function psiToBar(psi) {
+            return psi / 14.5038;
+        }
+        
+        function barToPsi(bar) {
+            return bar * 14.5038;
+        }
+        
+        function getDisplayDepth(meters) {
+            if (currentUnits === 'metric') {
+                return meters;
+            }
+            return metersToFeet(meters);
+        }
+        
+        function getDepthFromDisplay(value) {
+            if (currentUnits === 'metric') {
+                return value;
+            }
+            return feetToMeters(value);
+        }
+        
+        function formatDepth(meters) {
+            if (currentUnits === 'metric') {
+                return `${Math.floor(meters)}m`;
+            }
+            return `${Math.floor(metersToFeet(meters))}ft`;
+        }
+        
+        function formatPressure(pressure) {
+            if (currentUnits === 'metric') {
+                return `${Math.round(pressure)} bar`;
+            }
+            return `${Math.round(pressure)} psi`;
+        }
+        
+        // Auto-scale function
+        function autoScale() {
+            if (divePoints.length < 2) return;
+            
+            const depths = divePoints.map(p => getDisplayDepth(p.depth));
+            const times = divePoints.map(p => p.time);
+            
+            const maxDepth = Math.max(...depths);
+            const maxTime = Math.max(...times);
+            
+            // Add 10% padding
+            currentScale.maxDepth = Math.ceil(maxDepth * 1.1 / 10) * 10;
+            currentScale.maxTime = Math.ceil(maxTime * 1.1 / 10) * 10;
+            
+            // Minimum scales
+            if (currentUnits === 'metric') {
+                currentScale.maxDepth = Math.max(20, currentScale.maxDepth);
+            } else {
+                currentScale.maxDepth = Math.max(60, currentScale.maxDepth);
+            }
+            currentScale.maxTime = Math.max(30, currentScale.maxTime);
+            
+            redraw();
+        }
+        
+        // Reset scale to defaults
+        function resetScale() {
+            currentScale = {
+                maxDepth: currentUnits === 'metric' ? 50 : 165,
+                maxTime: 120
+            };
+            redraw();
+        }
+        
+        // Canvas drawing functions
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Grid settings
+            const maxDepth = currentScale.maxDepth;
+            const maxTime = currentScale.maxTime;
+            const padding = 40;
+            const rightPadding = 55; // Extra padding for pressure labels
+            const graphWidth = canvas.width - padding - rightPadding;
+            const graphHeight = canvas.height - 2 * padding;
+            
+            // Background
+            ctx.fillStyle = '#0a0f1c';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Grid lines
+            ctx.strokeStyle = '#2a3a4a';
+            ctx.lineWidth = 1;
+            
+            // Vertical lines (time) - adaptive spacing
+            const timeIntervals = maxTime <= 60 ? 6 : 12;
+            for (let i = 0; i <= timeIntervals; i++) {
+                const x = padding + (i * graphWidth / timeIntervals);
+                ctx.beginPath();
+                ctx.moveTo(x, padding);
+                ctx.lineTo(x, canvas.height - padding);
+                ctx.stroke();
+            }
+            
+            // Horizontal lines (depth and pressure share the same grid)
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (i * graphHeight / 5);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(canvas.width - rightPadding, y);
+                ctx.stroke();
+                
+                // Safety stop zone at 5m/15ft
+                const safetyDepth = currentUnits === 'metric' ? 5 : 15;
+                const depthAtLine = (i * maxDepth / 5);
+                if (Math.abs(depthAtLine - safetyDepth) < (maxDepth / 10)) {
+                    ctx.fillStyle = 'rgba(255, 170, 74, 0.1)';
+                    ctx.fillRect(padding, y - graphHeight/10, graphWidth, graphHeight/10);
+                }
+            }
+            
+            // Axes
+            ctx.strokeStyle = '#4a9eff';
+            ctx.lineWidth = 2;
+            // Left axis (depth)
+            ctx.beginPath();
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, canvas.height - padding);
+            ctx.lineTo(canvas.width - rightPadding, canvas.height - padding);
+            ctx.stroke();
+            
+            // Right axis (pressure)
+            ctx.beginPath();
+            ctx.moveTo(canvas.width - rightPadding, padding);
+            ctx.lineTo(canvas.width - rightPadding, canvas.height - padding);
+            ctx.stroke();
+            
+            // Labels
+            ctx.fillStyle = '#e0e0e0';
+            ctx.font = '11px sans-serif';
+            
+            // Depth labels (left side)
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (i * graphHeight / 5);
+                const depth = (i * maxDepth / 5);
+                ctx.fillText(formatDepth(getDepthFromDisplay(depth)), padding - 5, y + 5);
+            }
+            
+            // Pressure labels (right side)
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#4a9eff'; // Blue color for pressure
+            const startPressure = parseFloat(document.getElementById('startPressure').value);
+            const maxPressure = currentUnits === 'metric' ? 
+                Math.ceil(startPressure / 50) * 50 + 20 : // Round up to nearest 50 bar + buffer
+                Math.ceil(startPressure / 500) * 500 + 200; // Round up to nearest 500 psi + buffer
+            
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (i * graphHeight / 5);
+                const pressure = maxPressure - (i * maxPressure / 5);
+                const label = Math.round(pressure).toString();
+                ctx.fillText(label, canvas.width - rightPadding + 5, y + 5);
+            }
+            
+            // Time labels - adaptive spacing
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            const labelInterval = maxTime <= 60 ? 1 : 2;
+            for (let i = 0; i <= timeIntervals; i += labelInterval) {
+                const x = padding + (i * graphWidth / timeIntervals);
+                const time = Math.round(i * maxTime / timeIntervals);
+                ctx.fillText(`${time}`, x, canvas.height - padding + 5);
+            }
+            
+            // Axis labels
+            ctx.save();
+            // Depth label (left)
+            ctx.translate(15, canvas.height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#e0e0e0';
+            const depthLabel = currentUnits === 'metric' ? 'Depth (m)' : 'Depth (ft)';
+            ctx.fillText(depthLabel, 0, 0);
+            ctx.restore();
+            
+            // Pressure label (right)
+            ctx.save();
+            ctx.translate(canvas.width - 15, canvas.height / 2);
+            ctx.rotate(Math.PI / 2);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = '#4a9eff';
+            const pressureLabel = currentUnits === 'metric' ? 'Pressure (bar)' : 'Pressure (psi)';
+            ctx.fillText(pressureLabel, 0, 0);
+            ctx.restore();
+            
+            // Time label (bottom)
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#e0e0e0';
+            ctx.fillText('Time (minutes)', canvas.width / 2, canvas.height - 5);
+        }
+        
+        function pixelToDepthTime(x, y) {
+            const padding = 40;
+            const rightPadding = 55;
+            const graphWidth = canvas.width - padding - rightPadding;
+            const graphHeight = canvas.height - 2 * padding;
+            const maxDepth = currentScale.maxDepth;
+            const maxTime = currentScale.maxTime;
+            
+            const time = Math.max(0, Math.min(maxTime, ((x - padding) / graphWidth) * maxTime));
+            const depth = Math.max(0, Math.min(maxDepth, ((y - padding) / graphHeight) * maxDepth));
+            
+            return { 
+                time: time, 
+                depth: getDepthFromDisplay(depth) 
+            };
+        }
+        
+        function depthTimeToPixel(time, depth) {
+            const padding = 40;
+            const rightPadding = 55;
+            const graphWidth = canvas.width - padding - rightPadding;
+            const graphHeight = canvas.height - 2 * padding;
+            const maxDepth = currentScale.maxDepth;
+            const maxTime = currentScale.maxTime;
+            
+            const displayDepth = getDisplayDepth(depth);
+            const x = padding + (time / maxTime) * graphWidth;
+            const y = padding + (displayDepth / maxDepth) * graphHeight;
+            
+            return { x, y };
+        }
+        
+        function pressureToPixel(time, pressure) {
+            const padding = 40;
+            const rightPadding = 55;
+            const graphWidth = canvas.width - padding - rightPadding;
+            const graphHeight = canvas.height - 2 * padding;
+            const maxTime = currentScale.maxTime;
+            
+            const startPressure = parseFloat(document.getElementById('startPressure').value);
+            const maxPressure = currentUnits === 'metric' ? 
+                Math.ceil(startPressure / 50) * 50 + 20 : 
+                Math.ceil(startPressure / 500) * 500 + 200;
+            
+            const x = padding + (time / maxTime) * graphWidth;
+            const y = padding + ((maxPressure - pressure) / maxPressure) * graphHeight;
+            
+            return { x, y };
+        }
+        
+        function handleCanvasClick(e) {
+            if (drawMode !== 'click') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const point = pixelToDepthTime(x, y);
+            
+            // Add surface point at start if needed
+            if (divePoints.length === 0 && point.time > 0) {
+                divePoints.push({ time: 0, depth: 0 });
+            }
+            
+            divePoints.push(point);
+            divePoints.sort((a, b) => a.time - b.time);
+            
+            calculateProfile();
+            redraw();
+        }
+        
+        function handleMouseDown(e) {
+            if (drawMode !== 'drag') return;
+            isDrawing = true;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            divePoints = [{ time: 0, depth: 0 }];
+            const point = pixelToDepthTime(x, y);
+            if (point.time > 0) {
+                divePoints.push(point);
+            }
+        }
+        
+        function handleMouseMove(e) {
+            if (!isDrawing || drawMode !== 'drag') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const point = pixelToDepthTime(x, y);
+            
+            // Only add point if it's further in time than the last point
+            if (divePoints.length === 0 || point.time > divePoints[divePoints.length - 1].time) {
+                divePoints.push(point);
+                calculateProfile();
+                redraw();
+            }
+        }
+        
+        function handleMouseUp() {
+            if (drawMode !== 'drag') return;
+            isDrawing = false;
+            
+            if (divePoints.length > 1) {
+                // Add return to surface
+                const lastPoint = divePoints[divePoints.length - 1];
+                if (lastPoint.depth > 0) {
+                    const ascentTime = lastPoint.depth / 9;
+                    divePoints.push({ time: lastPoint.time + ascentTime, depth: 0 });
+                }
+                calculateProfile();
+                redraw();
+            }
+        }
+        
+        function calculateProfile() {
+            // Reset tissue loadings
+            tissueLoadings = new Array(16).fill(0.79);
+            diveProfile = [];
+            gasPressureProfile = [];
+            
+            if (divePoints.length < 2) return;
+            
+            // Get gas management settings
+            const sacRate = parseFloat(document.getElementById('sacRate').value);
+            const startPressure = parseFloat(document.getElementById('startPressure').value);
+            const tankType = document.getElementById('tankSelect').value;
+            const tank = tankSpecs[tankType];
+            
+            let currentPressure = startPressure;
+            
+            // Generate detailed profile with 3-second intervals
+            const timeStep = 0.05;
+            let currentTime = 0;
+            
+            for (let i = 0; i < divePoints.length - 1; i++) {
+                const start = divePoints[i];
+                const end = divePoints[i + 1];
+                
+                while (currentTime <= end.time) {
+                    const progress = (currentTime - start.time) / (end.time - start.time);
+                    const depth = start.depth + (end.depth - start.depth) * progress;
+                    
+                    // Calculate tissue loading at this point
+                    const fo2 = getFO2();
+                    const altitude = parseInt(document.getElementById('altitude').value);
+                    const surfacePressure = getSurfacePressure(altitude);
+                    const ambientPressure = surfacePressure + (depth / 10);
+                    const ppN2 = ambientPressure * (1 - fo2);
+                    
+                    // Update tissues
+                    updateTissueLoadings(ppN2, timeStep);
+                    
+                    // Calculate ceiling
+                    const ceiling = calculateCeiling();
+                    
+                    // Calculate gas consumption
+                    if (currentUnits === 'metric') {
+                        // Metric: SAC is in bar/min at surface
+                        const depthPressure = 1 + (depth / 10); // Absolute pressure in bar
+                        const gasUsed = sacRate * depthPressure * timeStep;
+                        currentPressure = Math.max(0, currentPressure - gasUsed);
+                    } else {
+                        // Imperial: SAC is in psi/min at surface
+                        const depthPressure = 1 + (depth / 33); // Absolute pressure in ATM
+                        const gasUsed = sacRate * depthPressure * timeStep;
+                        currentPressure = Math.max(0, currentPressure - gasUsed);
+                    }
+                    
+                    // Store profile point
+                    diveProfile.push({
+                        time: currentTime,
+                        depth: depth,
+                        ceiling: ceiling,
+                        tissues: [...tissueLoadings],
+                        ppN2: ppN2,
+                        ppO2: ambientPressure * fo2,
+                        pressure: currentPressure
+                    });
+                    
+                    currentTime += timeStep;
+                }
+            }
+            
+            updateAnalysis();
+            updateGasStatus();
+        }
+        
+        function updateTissueLoadings(ppN2, timeInterval) {
+            tissues.forEach((tissue, i) => {
+                const k = Math.log(2) / tissue.halfTime;
+                tissueLoadings[i] = ppN2 + (tissueLoadings[i] - ppN2) * Math.exp(-k * timeInterval);
+            });
+        }
+        
+        function calculateCeiling() {
+            const altitude = parseInt(document.getElementById('altitude').value);
+            const surfacePressure = getSurfacePressure(altitude);
+            const conservatism = parseFloat(document.getElementById('conservatism').value);
+            
+            let maxCeiling = 0;
+            
+            tissues.forEach((tissue, i) => {
+                const loading = tissueLoadings[i];
+                const mValue = tissue.a + surfacePressure / tissue.b;
+                const adjustedMValue = mValue * conservatism;
+                
+                if (loading > surfacePressure) {
+                    const ceilingPressure = (loading - tissue.a) * tissue.b;
+                    const ceilingDepth = Math.max(0, (ceilingPressure - surfacePressure) * 10);
+                    maxCeiling = Math.max(maxCeiling, ceilingDepth);
+                }
+            });
+            
+            return maxCeiling;
+        }
+        
+        function redraw() {
+            drawGrid();
+            
+            if (diveProfile.length === 0) return;
+            
+            // Draw gas pressure line
+            if (diveProfile.length > 0 && diveProfile[0].pressure !== undefined) {
+                ctx.strokeStyle = '#4a9eff';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 3]); // Dashed line for pressure
+                ctx.beginPath();
+                
+                diveProfile.forEach((point, i) => {
+                    const pos = pressureToPixel(point.time, point.pressure);
+                    if (i === 0) {
+                        ctx.moveTo(pos.x, pos.y);
+                    } else {
+                        ctx.lineTo(pos.x, pos.y);
+                    }
+                });
+                ctx.stroke();
+                ctx.setLineDash([]); // Reset to solid line
+            }
+            
+            // Draw ceiling
+            ctx.strokeStyle = '#ff4444';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            diveProfile.forEach((point, i) => {
+                const pos = depthTimeToPixel(point.time, point.ceiling);
+                if (i === 0) {
+                    ctx.moveTo(pos.x, pos.y);
+                } else {
+                    ctx.lineTo(pos.x, pos.y);
+                }
+            });
+            ctx.stroke();
+            
+            // Draw dive profile
+            ctx.strokeStyle = '#4aff4a';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            divePoints.forEach((point, i) => {
+                const pos = depthTimeToPixel(point.time, point.depth);
+                if (i === 0) {
+                    ctx.moveTo(pos.x, pos.y);
+                } else {
+                    ctx.lineTo(pos.x, pos.y);
+                }
+            });
+            ctx.stroke();
+            
+            // Draw waypoints
+            ctx.fillStyle = '#4aff4a';
+            divePoints.forEach(point => {
+                const pos = depthTimeToPixel(point.time, point.depth);
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Update tissue display with latest values
+            if (diveProfile.length > 0) {
+                const lastPoint = diveProfile[diveProfile.length - 1];
+                updateTissueDisplay(lastPoint.tissues);
+                updateAlgorithmDisplay(lastPoint);
+            }
+        }
+        
+        function updateAnalysis() {
+            if (diveProfile.length === 0) {
+                document.getElementById('maxDepth').textContent = formatDepth(0);
+                document.getElementById('diveTime').textContent = '0 min';
+                document.getElementById('decoTime').textContent = '0 min';
+                document.getElementById('cnsPercent').textContent = '0%';
+                return;
+            }
+            
+            // Calculate metrics
+            const maxDepth = Math.max(...diveProfile.map(p => p.depth));
+            const totalTime = diveProfile[diveProfile.length - 1].time;
+            
+            // Calculate deco time
+            let decoTime = 0;
+            let inDeco = false;
+            for (let i = diveProfile.length - 1; i >= 0; i--) {
+                if (diveProfile[i].ceiling > 0.5) {
+                    if (!inDeco) {
+                        inDeco = true;
+                        decoTime = totalTime - diveProfile[i].time;
+                    }
+                } else if (inDeco) {
+                    break;
+                }
+            }
+            
+            // Calculate CNS
+            let cns = 0;
+            for (let i = 1; i < diveProfile.length; i++) {
+                const ppO2 = diveProfile[i].ppO2;
+                const timeInterval = diveProfile[i].time - diveProfile[i-1].time;
+                cns += calculateCNSRate(ppO2) * timeInterval;
+            }
+            
+            // Update display
+            document.getElementById('maxDepth').textContent = formatDepth(maxDepth);
+            document.getElementById('diveTime').textContent = `${Math.round(totalTime)} min`;
+            document.getElementById('decoTime').textContent = `${Math.round(decoTime)} min`;
+            document.getElementById('cnsPercent').textContent = `${Math.round(cns)}%`;
+            
+            // Update status
+            updateStatus();
+        }
+        
+        function updateGasStatus() {
+            const sacRate = parseFloat(document.getElementById('sacRate').value);
+            const startPressure = parseFloat(document.getElementById('startPressure').value);
+            const reservePressure = parseFloat(document.getElementById('reservePressure').value);
+            const tankType = document.getElementById('tankSelect').value;
+            const tank = tankSpecs[tankType];
+            
+            if (diveProfile.length === 0) {
+                document.getElementById('currentPressure').textContent = formatPressure(startPressure);
+                document.getElementById('turnPressure').textContent = formatPressure(startPressure * 2/3);
+                document.getElementById('gasUsed').textContent = formatPressure(0);
+                document.getElementById('consumptionRate').textContent = '-- /min';
+                document.getElementById('timeToReserve').textContent = '-- min';
+                return;
+            }
+            
+            const lastPoint = diveProfile[diveProfile.length - 1];
+            const currentPressure = lastPoint.pressure || startPressure;
+            const gasUsed = startPressure - currentPressure;
+            const turnPressure = reservePressure + ((startPressure - reservePressure) * 2/3);
+            
+            // Calculate current consumption rate
+            let consumptionRate = 0;
+            if (lastPoint.depth > 0) {
+                consumptionRate = currentUnits === 'metric' ?
+                    sacRate * (1 + lastPoint.depth / 10) :  // bar/min at depth
+                    sacRate * (1 + lastPoint.depth / 33);   // psi/min at depth
+            }
+            
+            // Calculate time to reserve at current depth
+            let timeToReserve = '--';
+            if (lastPoint.depth > 0 && consumptionRate > 0) {
+                const remainingGas = currentPressure - reservePressure;
+                if (remainingGas > 0) {
+                    timeToReserve = Math.round(remainingGas / consumptionRate);
+                }
+            }
+            
+            // Update display
+            document.getElementById('currentPressure').textContent = formatPressure(currentPressure);
+            document.getElementById('currentPressure').className = 
+                currentPressure <= reservePressure ? 'danger' :
+                currentPressure <= turnPressure ? 'warning' : '';
+            
+            document.getElementById('turnPressure').textContent = formatPressure(turnPressure);
+            document.getElementById('gasUsed').textContent = formatPressure(gasUsed);
+            document.getElementById('consumptionRate').textContent = 
+                consumptionRate > 0 ? formatPressure(consumptionRate) + '/min' : '-- /min';
+            document.getElementById('timeToReserve').textContent = 
+                timeToReserve === '--' ? timeToReserve : `${timeToReserve} min`;
+            
+            // Update status if gas is critical
+            if (currentPressure <= reservePressure) {
+                const indicator = document.getElementById('statusIndicator');
+                const text = document.getElementById('statusText');
+                indicator.className = 'status-indicator status-danger';
+                text.textContent = 'CRITICAL: At reserve pressure!';
+            }
+        }
+        
+        function calculateCNSRate(ppO2) {
+            if (ppO2 >= 1.6) return 2.22;
+            else if (ppO2 >= 1.5) return 1.67;
+            else if (ppO2 >= 1.4) return 1.11;
+            else if (ppO2 >= 1.3) return 0.83;
+            else if (ppO2 >= 1.2) return 0.56;
+            else if (ppO2 >= 1.1) return 0.42;
+            else if (ppO2 >= 1.0) return 0.33;
+            else if (ppO2 >= 0.9) return 0.28;
+            else if (ppO2 >= 0.8) return 0.22;
+            else if (ppO2 >= 0.7) return 0.17;
+            else if (ppO2 >= 0.6) return 0.14;
+            else return 0;
+        }
+        
+        function updateStatus() {
+            const indicator = document.getElementById('statusIndicator');
+            const text = document.getElementById('statusText');
+            
+            if (diveProfile.length === 0) {
+                indicator.className = 'status-indicator';
+                text.textContent = 'Ready to draw';
+                return;
+            }
+            
+            // Check gas status first
+            const lastPoint = diveProfile[diveProfile.length - 1];
+            const reservePressure = parseFloat(document.getElementById('reservePressure').value);
+            if (lastPoint.pressure <= reservePressure) {
+                indicator.className = 'status-indicator status-danger';
+                text.textContent = 'CRITICAL: At reserve pressure!';
+                return;
+            }
+            
+            // Check for ceiling violations
+            let maxViolation = 0;
+            diveProfile.forEach(point => {
+                if (point.depth < point.ceiling) {
+                    maxViolation = Math.max(maxViolation, point.ceiling - point.depth);
+                }
+            });
+            
+            if (maxViolation > 1) {
+                indicator.className = 'status-indicator status-danger';
+                text.textContent = `CEILING VIOLATED by ${formatDepth(maxViolation)}!`;
+            } else if (maxViolation > 0) {
+                indicator.className = 'status-indicator status-caution';
+                text.textContent = 'Close to ceiling - ascend slowly';
+            } else {
+                const maxCeiling = Math.max(...diveProfile.map(p => p.ceiling));
+                if (maxCeiling > 3) {
+                    indicator.className = 'status-indicator status-caution';
+                    text.textContent = 'Decompression required';
+                } else {
+                    indicator.className = 'status-indicator status-safe';
+                    text.textContent = 'Within no-decompression limits';
+                }
+            }
+        }
+        
+        function initializeTissueDisplay() {
+            const grid = document.getElementById('tissueGrid');
+            grid.innerHTML = '';
+            
+            tissues.forEach((tissue, i) => {
+                const cell = document.createElement('div');
+                cell.className = 'tissue-cell';
+                cell.dataset.tissueIndex = i;
+                cell.dataset.category = tissue.category;
+                cell.innerHTML = `
+                    <div class="tissue-fill" id="tissue-fill-${i}" style="height: 79%"></div>
+                    <div class="tissue-text">
+                        <div style="font-weight: bold;">${tissue.halfTime}'</div>
+                        <div id="tissue-percent-${i}">79%</div>
+                        <div class="tissue-name">${tissue.name}</div>
+                    </div>
+                `;
+                cell.addEventListener('click', showTissueInfo);
+                grid.appendChild(cell);
+            });
+        }
+        
+        function updateAlgorithmDisplay(point) {
+            if (!point) {
+                // Show initial state with 79% loading
+                const initialLoading = 0.79; // Initial tissue loading
+                const altitude = parseInt(document.getElementById('altitude').value);
+                const surfacePressure = getSurfacePressure(altitude);
+                const conservatism = parseFloat(document.getElementById('conservatism').value);
+                
+                // Use compartment 5 (18.5 min) as example - typical for recreational diving
+                const tissue = tissues[4];
+                const k = Math.log(2) / tissue.halfTime;
+                
+                document.getElementById('k-value').textContent = k.toFixed(4) + ' /min';
+                document.getElementById('p-inspired').textContent = '0.79 bar';
+                document.getElementById('p-tissue').textContent = '0.79 bar';
+                document.getElementById('algo-leading-tissue').textContent = 'None (surface)';
+                document.getElementById('a-value').textContent = tissue.a.toFixed(4);
+                document.getElementById('b-value').textContent = tissue.b.toFixed(4);
+                
+                const mValue = tissue.a + surfacePressure / tissue.b;
+                const adjustedMValue = mValue * conservatism;
+                document.getElementById('m-value').textContent = adjustedMValue.toFixed(3) + ' bar';
+                document.getElementById('gf-value').textContent = 
+                    conservatism === 1.0 ? '100% (None)' : 
+                    conservatism === 0.9 ? '90% (Conservative)' : 
+                    '80% (Very Conservative)';
+                
+                document.getElementById('p-surface').textContent = surfacePressure.toFixed(3) + ' bar';
+                document.getElementById('ceiling-calc').textContent = formatDepth(0);
+                document.getElementById('safety-margin').textContent = formatDepth(0);
+                document.getElementById('safety-margin').style.color = '#4aff4a';
+                
+                document.getElementById('current-depth').textContent = formatDepth(0);
+                document.getElementById('current-time').textContent = '0 min';
+                document.getElementById('p-ambient').textContent = surfacePressure.toFixed(2) + ' bar';
+                document.getElementById('loading-percent').textContent = '79%';
+                document.getElementById('loading-percent').style.color = '#4aff4a';
+                return;
+            }
+            
+            // Find leading tissue
+            const altitude = parseInt(document.getElementById('altitude').value);
+            const surfacePressure = getSurfacePressure(altitude);
+            const conservatism = parseFloat(document.getElementById('conservatism').value);
+            
+            let maxPercentage = 0;
+            let leadingTissueIndex = -1;
+            
+            tissues.forEach((tissue, i) => {
+                const mValue = tissue.a + surfacePressure / tissue.b;
+                const percentage = (point.tissues[i] / mValue) * 100;
+                if (percentage > maxPercentage) {
+                    maxPercentage = percentage;
+                    leadingTissueIndex = i;
+                }
+            });
+            
+            if (leadingTissueIndex >= 0) {
+                const tissue = tissues[leadingTissueIndex];
+                const loading = point.tissues[leadingTissueIndex];
+                
+                // Update tissue loading parameters
+                const k = Math.log(2) / tissue.halfTime;
+                document.getElementById('k-value').textContent = k.toFixed(4) + ' /min';
+                document.getElementById('p-inspired').textContent = point.ppN2.toFixed(3) + ' bar';
+                document.getElementById('p-tissue').textContent = loading.toFixed(3) + ' bar';
+                
+                // Update M-value parameters
+                document.getElementById('algo-leading-tissue').textContent = 
+                    `#${leadingTissueIndex + 1} - ${tissue.name} (${tissue.halfTime}')`;
+                document.getElementById('a-value').textContent = tissue.a.toFixed(4);
+                document.getElementById('b-value').textContent = tissue.b.toFixed(4);
+                
+                const mValue = tissue.a + surfacePressure / tissue.b;
+                const adjustedMValue = mValue * conservatism;
+                document.getElementById('m-value').textContent = adjustedMValue.toFixed(3) + ' bar';
+                document.getElementById('gf-value').textContent = 
+                    conservatism === 1.0 ? '100% (None)' : 
+                    conservatism === 0.9 ? '90% (Conservative)' : 
+                    '80% (Very Conservative)';
+                
+                // Update ceiling calculation
+                document.getElementById('p-surface').textContent = surfacePressure.toFixed(3) + ' bar';
+                document.getElementById('ceiling-calc').textContent = formatDepth(point.ceiling);
+                
+                const safetyMargin = point.depth - point.ceiling;
+                document.getElementById('safety-margin').textContent = 
+                    safetyMargin > 0 ? `+${formatDepth(safetyMargin)}` : formatDepth(safetyMargin);
+                document.getElementById('safety-margin').style.color = 
+                    safetyMargin < 0 ? '#ff4444' : safetyMargin < 3 ? '#ffaa4a' : '#4aff4a';
+            }
+            
+            // Update current dive state
+            document.getElementById('current-depth').textContent = formatDepth(point.depth);
+            document.getElementById('current-time').textContent = `${Math.round(point.time)} min`;
+            document.getElementById('p-ambient').textContent = 
+                `${(surfacePressure + point.depth / 10).toFixed(2)} bar`;
+            document.getElementById('loading-percent').textContent = `${Math.round(maxPercentage)}%`;
+            document.getElementById('loading-percent').style.color = 
+                maxPercentage > 100 ? '#ff4444' : maxPercentage > 80 ? '#ffaa4a' : '#4aff4a';
+        }
+        
+        function updateTissueDisplay(loadings) {
+            if (!loadings) loadings = tissueLoadings;
+            
+            let maxPercentage = 0;
+            let leadingCompartment = -1;
+            
+            // Remove leading class from all cells
+            document.querySelectorAll('.tissue-cell').forEach(cell => {
+                cell.classList.remove('leading');
+            });
+            
+            tissues.forEach((tissue, i) => {
+                const altitude = parseInt(document.getElementById('altitude').value);
+                const surfacePressure = getSurfacePressure(altitude);
+                const mValue = tissue.a + surfacePressure / tissue.b;
+                const percentage = (loadings[i] / mValue) * 100;
+                
+                if (percentage > maxPercentage) {
+                    maxPercentage = percentage;
+                    leadingCompartment = i;
+                }
+                
+                const fillHeight = Math.min(100, percentage);
+                document.getElementById(`tissue-fill-${i}`).style.height = `${fillHeight}%`;
+                document.getElementById(`tissue-percent-${i}`).textContent = `${Math.round(percentage)}%`;
+            });
+            
+            // Update leading tissue indicator
+            if (leadingCompartment >= 0) {
+                document.getElementById('leadingTissue').innerHTML = 
+                    `Leading: <span style="color: #4a9eff;">Compartment ${leadingCompartment + 1} - ${tissues[leadingCompartment].name} (${tissues[leadingCompartment].halfTime}' half-time)</span>`;
+                
+                // Add visual indicator to leading tissue
+                const leadingCell = document.querySelector(`[data-tissue-index="${leadingCompartment}"]`);
+                if (leadingCell) {
+                    leadingCell.classList.add('leading');
+                }
+            }
+        }
+        
+        function showTissueInfo(e) {
+            const tissueIndex = parseInt(e.currentTarget.dataset.tissueIndex);
+            const tissue = tissues[tissueIndex];
+            const category = tissueInfo[tissue.category];
+            
+            // Get current loading percentage
+            const altitude = parseInt(document.getElementById('altitude').value);
+            const surfacePressure = getSurfacePressure(altitude);
+            const mValue = tissue.a + surfacePressure / tissue.b;
+            const currentLoading = tissueLoadings[tissueIndex];
+            const percentage = (currentLoading / mValue) * 100;
+            const saturationBar = Math.min(10, Math.round(percentage / 10));
+            
+            // Get category color
+            const categoryColors = {
+                'fast': '#ff6b6b',
+                'medium-fast': '#ffa94d',
+                'medium': '#74c0fc',
+                'medium-slow': '#63e6be',
+                'slow': '#b197fc'
+            };
+            
+            document.getElementById('tissueModalTitle').innerHTML = 
+                `<span style="color: ${categoryColors[tissue.category]};">Compartment ${tissueIndex + 1}</span> - ${tissue.name}`;
+            document.getElementById('tissueModalCompartment').textContent = 
+                `${tissue.halfTime} minute half-time tissue compartment representing ${tissue.name.toLowerCase()} tissues. Part of the ${category.title.toLowerCase()} group.`;
+            document.getElementById('tissueModalLoading').innerHTML = 
+                `<span style="color: ${percentage > 100 ? '#ff4444' : percentage > 80 ? '#ffaa4a' : '#4aff4a'};">${Math.round(percentage)}%</span> of M-value (${currentLoading.toFixed(3)} bar N₂ pressure)<br>` +
+                `<span style="font-family: monospace;">[${'█'.repeat(saturationBar)}${'░'.repeat(10 - saturationBar)}]</span>`;
+            document.getElementById('tissueModalDescription').textContent = category.description;
+            document.getElementById('tissueModalConcerns').textContent = category.concerns;
+            
+            document.getElementById('modalOverlay').style.display = 'block';
+            document.getElementById('tissueInfoModal').style.display = 'block';
+        }
+        
+        function closeTissueInfo() {
+            document.getElementById('modalOverlay').style.display = 'none';
+            document.getElementById('tissueInfoModal').style.display = 'none';
+        }
+        
+        function playbackDive() {
+            if (playbackInterval) {
+                clearInterval(playbackInterval);
+                playbackInterval = null;
+                document.getElementById('playbackBtn').textContent = '▶ Playback Dive';
+                return;
+            }
+            
+            if (diveProfile.length === 0) return;
+            
+            playbackIndex = 0;
+            document.getElementById('playbackBtn').textContent = '⏸ Pause';
+            
+            playbackInterval = setInterval(() => {
+                if (playbackIndex >= diveProfile.length) {
+                    clearInterval(playbackInterval);
+                    playbackInterval = null;
+                    document.getElementById('playbackBtn').textContent = '▶ Playback Dive';
+                    return;
+                }
+                
+                const point = diveProfile[playbackIndex];
+                updateTissueDisplay(point.tissues);
+                updateAlgorithmDisplay(point);
+                
+                // Draw position indicator
+                redraw();
+                const pos = depthTimeToPixel(point.time, point.depth);
+                ctx.fillStyle = '#ffaa4a';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Update gas display during playback
+                if (point.pressure !== undefined) {
+                    document.getElementById('currentPressure').textContent = formatPressure(point.pressure);
+                    
+                    // Calculate and display consumption rate at this point
+                    const sacRate = parseFloat(document.getElementById('sacRate').value);
+                    const consumptionRate = currentUnits === 'metric' ?
+                        sacRate * (1 + point.depth / 10) :
+                        sacRate * (1 + point.depth / 33);
+                    document.getElementById('consumptionRate').textContent = 
+                        point.depth > 0 ? formatPressure(consumptionRate) + '/min' : '-- /min';
+                }
+                
+                playbackIndex += 2;
+            }, 100);
+        }
+        
+        function clearProfile() {
+            divePoints = [];
+            diveProfile = [];
+            tissueLoadings = new Array(16).fill(0.79);
+            
+            // Reset scale to defaults
+            currentScale = {
+                maxDepth: currentUnits === 'metric' ? 50 : 165,
+                maxTime: 120
+            };
+            
+            redraw();
+            updateAnalysis();
+            updateTissueDisplay();
+            updateAlgorithmDisplay(null);
+            updateGasStatus();
+        }
+        
+        function undoLastPoint() {
+            if (divePoints.length > 0) {
+                divePoints.pop();
+                calculateProfile();
+                redraw();
+            }
+        }
+        
+        function toggleDrawMode() {
+            drawMode = drawMode === 'click' ? 'drag' : 'click';
+            document.getElementById('drawModeBtn').textContent = `Drawing Mode: ${drawMode.charAt(0).toUpperCase() + drawMode.slice(1)}`;
+            canvas.style.cursor = drawMode === 'drag' ? 'crosshair' : 'pointer';
+        }
+        
+        function loadTemplate(type) {
+            divePoints = [{ time: 0, depth: 0 }];
+            
+            switch(type) {
+                case 'square':
+                    // Conservative square profile - 18m/60ft for 35 minutes
+                    // AL80 friendly: ~1800 psi used at 20 psi/min SAC
+                    divePoints.push({ time: 2, depth: 18 });      // Descend to 18m
+                    divePoints.push({ time: 37, depth: 18 });     // Bottom time at 18m
+                    divePoints.push({ time: 38, depth: 5 });      // Ascend to safety stop
+                    divePoints.push({ time: 41, depth: 5 });      // 3 min safety stop
+                    divePoints.push({ time: 42, depth: 0 });      // Surface
+                    break;
+                    
+                case 'multilevel':
+                    // Realistic multi-level dive - progressively shallower
+                    // AL80 friendly: ~1900 psi used, maximizes bottom time
+                    divePoints.push({ time: 2, depth: 25 });      // Descend to 25m
+                    divePoints.push({ time: 12, depth: 25 });     // 10 min at 25m
+                    divePoints.push({ time: 14, depth: 18 });     // Ascend to 18m
+                    divePoints.push({ time: 24, depth: 18 });     // 10 min at 18m
+                    divePoints.push({ time: 26, depth: 12 });     // Ascend to 12m
+                    divePoints.push({ time: 36, depth: 12 });     // 10 min at 12m
+                    divePoints.push({ time: 37, depth: 5 });      // Ascend to safety stop
+                    divePoints.push({ time: 40, depth: 5 });      // 3 min safety stop
+                    divePoints.push({ time: 41, depth: 0 });      // Surface
+                    break;
+                    
+                case 'sawtooth':
+                    // Mild sawtooth (still not recommended!) - shallower depths
+                    // Shows why yo-yo profiles waste gas and increase DCS risk
+                    divePoints.push({ time: 2, depth: 15 });      // Descend to 15m
+                    divePoints.push({ time: 5, depth: 8 });       // Up to 8m
+                    divePoints.push({ time: 8, depth: 15 });      // Back to 15m
+                    divePoints.push({ time: 11, depth: 8 });      // Up to 8m
+                    divePoints.push({ time: 14, depth: 15 });     // Back to 15m
+                    divePoints.push({ time: 17, depth: 8 });      // Up to 8m
+                    divePoints.push({ time: 20, depth: 12 });     // Down to 12m
+                    divePoints.push({ time: 22, depth: 5 });      // Ascend to safety stop
+                    divePoints.push({ time: 25, depth: 5 });      // 3 min safety stop
+                    divePoints.push({ time: 26, depth: 0 });      // Surface
+                    break;
+                    
+                case 'bounce':
+                    // Moderate deep dive with proper ascent
+                    // AL80 friendly: ~2100 psi used, proper deep stop and safety stop
+                    divePoints.push({ time: 3, depth: 30 });      // Descend to 30m
+                    divePoints.push({ time: 8, depth: 30 });      // 5 min at 30m (NDL aware)
+                    divePoints.push({ time: 10, depth: 20 });     // Ascend to 20m
+                    divePoints.push({ time: 15, depth: 20 });     // 5 min at 20m
+                    divePoints.push({ time: 17, depth: 15 });     // Ascend to 15m
+                    divePoints.push({ time: 22, depth: 15 });     // 5 min at 15m
+                    divePoints.push({ time: 24, depth: 9 });      // Ascend to 9m
+                    divePoints.push({ time: 27, depth: 9 });      // 3 min at 9m (deep stop)
+                    divePoints.push({ time: 28, depth: 5 });      // Ascend to safety stop
+                    divePoints.push({ time: 31, depth: 5 });      // 3 min safety stop
+                    divePoints.push({ time: 32, depth: 0 });      // Surface
+                    break;
+            }
+            
+            calculateProfile();
+            redraw();
+        }
+        
+        function updateUnits() {
+            currentUnits = document.getElementById('units').value;
+            
+            // Update default scale for new units
+            if (divePoints.length === 0) {
+                currentScale = {
+                    maxDepth: currentUnits === 'metric' ? 50 : 165,
+                    maxTime: 120
+                };
+            }
+            
+            // Update SAC rate label and values
+            const sacLabel = document.getElementById('sacRate').previousElementSibling;
+            const sacInput = document.getElementById('sacRate');
+            const pressureLabels = ['startPressure', 'reservePressure'];
+            
+            if (currentUnits === 'metric') {
+                sacLabel.textContent = 'SAC Rate (bar/min):';
+                sacInput.value = '1.4';
+                sacInput.min = '0.5';
+                sacInput.max = '3';
+                sacInput.step = '0.1';
+                
+                pressureLabels.forEach(id => {
+                    const input = document.getElementById(id);
+                    input.previousElementSibling.textContent = 
+                        id === 'startPressure' ? 'Start Pressure (bar):' : 'Reserve (bar):';
+                    input.value = id === 'startPressure' ? '200' : '50';
+                    input.min = id === 'startPressure' ? '150' : '30';
+                    input.max = id === 'startPressure' ? '250' : '70';
+                    input.step = '5';
+                });
+            } else {
+                sacLabel.textContent = 'SAC Rate (psi/min):';
+                sacInput.value = '20';
+                sacInput.min = '10';
+                sacInput.max = '40';
+                sacInput.step = '1';
+                
+                pressureLabels.forEach(id => {
+                    const input = document.getElementById(id);
+                    input.previousElementSibling.textContent = 
+                        id === 'startPressure' ? 'Start Pressure (psi):' : 'Reserve (psi):';
+                    input.value = id === 'startPressure' ? '3000' : '500';
+                    input.min = id === 'startPressure' ? '2000' : '300';
+                    input.max = id === 'startPressure' ? '3500' : '1000';
+                    input.step = '50';
+                });
+            }
+            
+            // Convert existing points
+            if (divePoints.length > 0) {
+                calculateProfile();
+            }
+            
+            redraw();
+            updateAnalysis();
+            updateGasStatus();
+            if (diveProfile.length > 0) {
+                updateAlgorithmDisplay(diveProfile[diveProfile.length - 1]);
+            }
+        }
+        
+        function updateGas() {
+            if (diveProfile.length > 0) {
+                calculateProfile();
+                redraw();
+            }
+        }
+        
+        function recalculate() {
+            if (diveProfile.length > 0) {
+                calculateProfile();
+                redraw();
+                updateAlgorithmDisplay(diveProfile[diveProfile.length - 1]);
+            } else {
+                updateAlgorithmDisplay(null);
+            }
+        }
+        
+        function getFO2() {
+            const gas = document.getElementById('gasSelect').value;
+            const fo2Map = { air: 0.21, ean32: 0.32, ean36: 0.36 };
+            return fo2Map[gas];
+        }
+        
+        function getSurfacePressure(altitude) {
+            const pressures = [1.0, 0.9, 0.82, 0.74];
+            return pressures[altitude];
+        }
+        
+        // Initialize canvas
+        window.onload = function() {
+            canvas = document.getElementById('diveCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set actual canvas size
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = 320;
+            
+            // Canvas event listeners
+            canvas.addEventListener('click', handleCanvasClick);
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseUp);
+            
+            // Button event listeners
+            document.getElementById('clearBtn').addEventListener('click', clearProfile);
+            document.getElementById('undoBtn').addEventListener('click', undoLastPoint);
+            document.getElementById('playbackBtn').addEventListener('click', playbackDive);
+            document.getElementById('drawModeBtn').addEventListener('click', toggleDrawMode);
+            document.getElementById('autoScaleBtn').addEventListener('click', autoScale);
+            document.getElementById('resetScaleBtn').addEventListener('click', resetScale);
+            document.getElementById('resetScaleBtn').addEventListener('click', resetScale);
+            
+            // Template buttons
+            document.getElementById('squareBtn').addEventListener('click', () => loadTemplate('square'));
+            document.getElementById('multilevelBtn').addEventListener('click', () => loadTemplate('multilevel'));
+            document.getElementById('sawtoothBtn').addEventListener('click', () => loadTemplate('sawtooth'));
+            document.getElementById('bounceBtn').addEventListener('click', () => loadTemplate('bounce'));
+            
+            // Settings change listeners
+            document.getElementById('units').addEventListener('change', updateUnits);
+            document.getElementById('gasSelect').addEventListener('change', updateGas);
+            document.getElementById('altitude').addEventListener('change', recalculate);
+            document.getElementById('conservatism').addEventListener('change', recalculate);
+            
+            // Gas management listeners
+            document.getElementById('sacRate').addEventListener('change', recalculate);
+            document.getElementById('tankSelect').addEventListener('change', recalculate);
+            document.getElementById('startPressure').addEventListener('change', recalculate);
+            document.getElementById('reservePressure').addEventListener('change', recalculate);
+            
+            // Modal event listeners
+            document.getElementById('closeModal').addEventListener('click', closeTissueInfo);
+            document.getElementById('modalOverlay').addEventListener('click', closeTissueInfo);
+            
+            // Close modal on Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && document.getElementById('tissueInfoModal').style.display === 'block') {
+                    closeTissueInfo();
+                }
+            });
+            
+            // Initialize tissue display
+            initializeTissueDisplay();
+            
+            // Algorithm panel toggle
+            document.getElementById('algorithmPanel').querySelector('h2').addEventListener('click', function() {
+                const content = document.getElementById('algorithmContent');
+                const arrow = this.querySelector('span');
+                if (content.classList.contains('collapsed')) {
+                    content.classList.remove('collapsed');
+                    arrow.textContent = '▼';
+                } else {
+                    content.classList.add('collapsed');
+                    arrow.textContent = '▶';
+                }
+            });
+            
+            // Start collapsed on mobile
+            if (window.innerWidth <= 768) {
+                document.getElementById('algorithmContent').classList.add('collapsed');
+                document.getElementById('algorithmPanel').querySelector('h2 span').textContent = '▶';
+            }
+            
+            // Update initial gas status
+            updateGasStatus();
+            
+            // Initialize algorithm display
+            updateAlgorithmDisplay(null);
+            
+            // Draw empty grid
+            drawGrid();
+            
+            // Resize handler
+            window.addEventListener('resize', function() {
+                if (!canvas) return;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = 320;
+                drawGrid();
+                if (diveProfile.length > 0) {
+                    redraw();
+                }
+            });
+        };
+    </script>
+</body>
+</html>
