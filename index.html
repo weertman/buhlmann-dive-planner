@@ -67,7 +67,7 @@
             border-radius: 5px;
             cursor: crosshair;
             width: 100%;
-            height: 320px;
+            height: 400px;
             display: block;
         }
         
@@ -423,6 +423,71 @@
             margin: 5px 0;
         }
         
+        .gas-status-item span.warning {
+            color: #ffaa4a;
+            font-weight: bold;
+        }
+        
+        .gas-status-item span.danger {
+            color: #ff4444;
+            font-weight: bold;
+        }
+        
+        .gas-calculation {
+            background: #0a0f1c;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+            font-size: 12px;
+            border: 1px solid #2a3a4a;
+        }
+        
+        .gas-formula {
+            background: #1a2332;
+            padding: 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            text-align: center;
+            color: #4a9eff;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .gas-calc-params {
+            display: grid;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        
+        .gas-calc-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 8px;
+            background: #1a2332;
+            border-radius: 3px;
+        }
+        
+        .calc-label {
+            color: #888;
+            font-size: 11px;
+        }
+        
+        .calc-value {
+            color: #4aff4a;
+            font-weight: bold;
+            font-family: monospace;
+        }
+        
+        .gas-calc-note {
+            font-size: 10px;
+            color: #888;
+            line-height: 1.3;
+            margin-top: 8px;
+            padding: 6px;
+            background: #1a2332;
+            border-radius: 3px;
+        }
+        
         .instructions-panel {
             background: #1a2332;
             border-radius: 10px;
@@ -625,6 +690,10 @@
                 grid-column: 1;
             }
             
+            #diveCanvas {
+                height: 350px;
+            }
+            
             .template-buttons {
                 grid-template-columns: 1fr 1fr;
             }
@@ -704,6 +773,18 @@
             .algorithm-section h3 {
                 font-size: 12px;
             }
+            
+            .gas-calculation h3 {
+                font-size: 12px;
+            }
+            
+            .gas-calc-item {
+                padding: 3px 6px;
+            }
+            
+            .calc-label {
+                font-size: 10px;
+            }
         }
     </style>
 </head>
@@ -734,7 +815,7 @@
                         <span>Deco Ceiling (depth)</span>
                     </div>
                     <div class="legend-item">
-                        <div class="legend-line" style="background: #4a9eff; background-image: linear-gradient(to right, #4a9eff 60%, transparent 60%); background-size: 8px 2px;"></div>
+                        <div class="legend-line" style="background: #4a9eff; background-image: repeating-linear-gradient(90deg, #4a9eff, #4a9eff 5px, transparent 5px, transparent 8px);"></div>
                         <span>Gas Pressure (right axis)</span>
                     </div>
                     <div class="legend-item">
@@ -828,7 +909,7 @@
                         </div>
                         <div class="gas-status-item">
                             <span>Turn Pressure:</span>
-                            <span id="turnPressure">2000 psi</span>
+                            <span id="turnPressure" title="Rule of thirds - turn dive when 1/3 of usable gas consumed">2000 psi</span>
                         </div>
                         <div class="gas-status-item">
                             <span>Gas Used:</span>
@@ -1297,8 +1378,8 @@
             // Grid settings
             const maxDepth = currentScale.maxDepth;
             const maxTime = currentScale.maxTime;
-            const padding = 40;
-            const rightPadding = 55; // Extra padding for pressure labels
+            const padding = 50; // Increased for better label spacing
+            const rightPadding = 65; // Extra padding for pressure labels
             const graphWidth = canvas.width - padding - rightPadding;
             const graphHeight = canvas.height - 2 * padding;
             
@@ -1306,9 +1387,25 @@
             ctx.fillStyle = '#0a0f1c';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
+            // Draw safety stop zone first (behind grid)
+            const safetyDepth = currentUnits === 'metric' ? 5 : 15;
+            const safetyY = padding + (safetyDepth / maxDepth) * graphHeight;
+            ctx.fillStyle = 'rgba(255, 170, 74, 0.15)';
+            ctx.fillRect(padding, safetyY, graphWidth, graphHeight/10);
+            
+            // Add safety zone label
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 170, 74, 0.7)';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            const safetyLabel = currentUnits === 'metric' ? 'Safety Stop (5m)' : 'Safety Stop (15ft)';
+            ctx.fillText(safetyLabel, padding + 5, safetyY + graphHeight/20);
+            ctx.restore();
+            
             // Grid lines
             ctx.strokeStyle = '#2a3a4a';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 0.5;
             
             // Vertical lines (time) - adaptive spacing
             const timeIntervals = maxTime <= 60 ? 6 : 12;
@@ -1320,21 +1417,13 @@
                 ctx.stroke();
             }
             
-            // Horizontal lines (depth and pressure share the same grid)
+            // Horizontal lines (depth)
             for (let i = 0; i <= 5; i++) {
                 const y = padding + (i * graphHeight / 5);
                 ctx.beginPath();
                 ctx.moveTo(padding, y);
                 ctx.lineTo(canvas.width - rightPadding, y);
                 ctx.stroke();
-                
-                // Safety stop zone at 5m/15ft
-                const safetyDepth = currentUnits === 'metric' ? 5 : 15;
-                const depthAtLine = (i * maxDepth / 5);
-                if (Math.abs(depthAtLine - safetyDepth) < (maxDepth / 10)) {
-                    ctx.fillStyle = 'rgba(255, 170, 74, 0.1)';
-                    ctx.fillRect(padding, y - graphHeight/10, graphWidth, graphHeight/10);
-                }
             }
             
             // Axes
@@ -1353,20 +1442,51 @@
             ctx.lineTo(canvas.width - rightPadding, canvas.height - padding);
             ctx.stroke();
             
+            // Add tick marks
+            ctx.lineWidth = 1;
+            // Left axis ticks
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (i * graphHeight / 5);
+                ctx.beginPath();
+                ctx.moveTo(padding - 5, y);
+                ctx.lineTo(padding, y);
+                ctx.stroke();
+            }
+            
+            // Right axis ticks
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (i * graphHeight / 5);
+                ctx.beginPath();
+                ctx.moveTo(canvas.width - rightPadding, y);
+                ctx.lineTo(canvas.width - rightPadding + 5, y);
+                ctx.stroke();
+            }
+            
+            // Bottom axis ticks
+            for (let i = 0; i <= timeIntervals; i++) {
+                const x = padding + (i * graphWidth / timeIntervals);
+                ctx.beginPath();
+                ctx.moveTo(x, canvas.height - padding);
+                ctx.lineTo(x, canvas.height - padding + 5);
+                ctx.stroke();
+            }
+            
             // Labels
             ctx.fillStyle = '#e0e0e0';
             ctx.font = '11px sans-serif';
             
             // Depth labels (left side)
             ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
             for (let i = 0; i <= 5; i++) {
                 const y = padding + (i * graphHeight / 5);
                 const depth = (i * maxDepth / 5);
-                ctx.fillText(formatDepth(getDepthFromDisplay(depth)), padding - 5, y + 5);
+                ctx.fillText(formatDepth(getDepthFromDisplay(depth)), padding - 10, y);
             }
             
             // Pressure labels (right side)
             ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
             ctx.fillStyle = '#4a9eff'; // Blue color for pressure
             const startPressure = parseFloat(document.getElementById('startPressure').value);
             const maxPressure = currentUnits === 'metric' ? 
@@ -1377,23 +1497,25 @@
                 const y = padding + (i * graphHeight / 5);
                 const pressure = maxPressure - (i * maxPressure / 5);
                 const label = Math.round(pressure).toString();
-                ctx.fillText(label, canvas.width - rightPadding + 5, y + 5);
+                ctx.fillText(label, canvas.width - rightPadding + 10, y);
             }
             
             // Time labels - adaptive spacing
+            ctx.fillStyle = '#e0e0e0';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
             const labelInterval = maxTime <= 60 ? 1 : 2;
             for (let i = 0; i <= timeIntervals; i += labelInterval) {
                 const x = padding + (i * graphWidth / timeIntervals);
                 const time = Math.round(i * maxTime / timeIntervals);
-                ctx.fillText(`${time}`, x, canvas.height - padding + 5);
+                ctx.fillText(`${time}`, x, canvas.height - padding + 10);
             }
             
             // Axis labels
             ctx.save();
+            ctx.font = '13px sans-serif';
             // Depth label (left)
-            ctx.translate(15, canvas.height / 2);
+            ctx.translate(12, canvas.height / 2);
             ctx.rotate(-Math.PI / 2);
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -1404,7 +1526,8 @@
             
             // Pressure label (right)
             ctx.save();
-            ctx.translate(canvas.width - 15, canvas.height / 2);
+            ctx.font = '13px sans-serif';
+            ctx.translate(canvas.width - 12, canvas.height / 2);
             ctx.rotate(Math.PI / 2);
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
@@ -1414,14 +1537,15 @@
             ctx.restore();
             
             // Time label (bottom)
+            ctx.font = '13px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillStyle = '#e0e0e0';
-            ctx.fillText('Time (minutes)', canvas.width / 2, canvas.height - 5);
+            ctx.fillText('Time (minutes)', canvas.width / 2, canvas.height - 8);
         }
         
         function pixelToDepthTime(x, y) {
-            const padding = 40;
-            const rightPadding = 55;
+            const padding = 50;
+            const rightPadding = 65;
             const graphWidth = canvas.width - padding - rightPadding;
             const graphHeight = canvas.height - 2 * padding;
             const maxDepth = currentScale.maxDepth;
@@ -1437,8 +1561,8 @@
         }
         
         function depthTimeToPixel(time, depth) {
-            const padding = 40;
-            const rightPadding = 55;
+            const padding = 50;
+            const rightPadding = 65;
             const graphWidth = canvas.width - padding - rightPadding;
             const graphHeight = canvas.height - 2 * padding;
             const maxDepth = currentScale.maxDepth;
@@ -1452,8 +1576,8 @@
         }
         
         function pressureToPixel(time, pressure) {
-            const padding = 40;
-            const rightPadding = 55;
+            const padding = 50;
+            const rightPadding = 65;
             const graphWidth = canvas.width - padding - rightPadding;
             const graphHeight = canvas.height - 2 * padding;
             const maxTime = currentScale.maxTime;
@@ -1763,26 +1887,70 @@
             const tankType = document.getElementById('tankSelect').value;
             const tank = tankSpecs[tankType];
             
+            // Update gas formula display based on units (only if element exists)
+            const formulaDiv = document.querySelector('.gas-formula');
+            if (formulaDiv) {
+                if (currentUnits === 'metric') {
+                    formulaDiv.innerHTML = '<strong>Formula:</strong> Consumption = SAC × Absolute Pressure (bar)';
+                } else {
+                    formulaDiv.innerHTML = '<strong>Formula:</strong> Consumption = SAC × Absolute Pressure (ATM)';
+                }
+            }
+            
+            // Update gas calculation note with current values (only if element exists)
+            const noteDiv = document.querySelector('.gas-calc-note');
+            if (noteDiv) {
+                if (currentUnits === 'metric') {
+                    noteDiv.innerHTML = `<strong>Example:</strong> At 10m, absolute pressure = 2.0 bar (double surface).<br>
+                        With ${sacRate.toFixed(1)} bar/min SAC: ${sacRate.toFixed(1)} × 2.0 = ${(sacRate * 2).toFixed(1)} bar/min at 10m.`;
+                } else {
+                    noteDiv.innerHTML = `<strong>Example:</strong> At 33ft, absolute pressure = 2.0 ATM (double surface).<br>
+                        With ${sacRate} psi/min SAC: ${sacRate} × 2.0 = ${sacRate * 2} psi/min at 33ft.`;
+                }
+            }
+            
             if (diveProfile.length === 0) {
+                const usableGas = startPressure - reservePressure;
+                const turnPressure = startPressure - (usableGas / 3);
+                
                 document.getElementById('currentPressure').textContent = formatPressure(startPressure);
-                document.getElementById('turnPressure').textContent = formatPressure(startPressure * 2/3);
+                document.getElementById('turnPressure').textContent = formatPressure(turnPressure);
                 document.getElementById('gasUsed').textContent = formatPressure(0);
                 document.getElementById('consumptionRate').textContent = '-- /min';
                 document.getElementById('timeToReserve').textContent = '-- min';
+                
+                // Update calculation display (only if elements exist)
+                if (document.getElementById('calc-depth')) {
+                    document.getElementById('calc-depth').textContent = formatDepth(0);
+                }
+                if (document.getElementById('calc-pressure')) {
+                    const initialPressure = currentUnits === 'metric' ? '1.0 bar' : '1.0 ATM';
+                    document.getElementById('calc-pressure').textContent = initialPressure;
+                }
+                if (document.getElementById('calc-sac')) {
+                    document.getElementById('calc-sac').textContent = formatPressure(sacRate) + '/min';
+                }
+                if (document.getElementById('calc-consumption')) {
+                    document.getElementById('calc-consumption').textContent = formatPressure(sacRate) + '/min';
+                }
                 return;
             }
             
             const lastPoint = diveProfile[diveProfile.length - 1];
             const currentPressure = lastPoint.pressure || startPressure;
             const gasUsed = startPressure - currentPressure;
-            const turnPressure = reservePressure + ((startPressure - reservePressure) * 2/3);
+            const usableGas = startPressure - reservePressure;
+            const turnPressure = startPressure - (usableGas / 3); // Rule of thirds
             
-            // Calculate current consumption rate
+            // Calculate current consumption rate and depth factor
             let consumptionRate = 0;
-            if (lastPoint.depth > 0) {
-                consumptionRate = currentUnits === 'metric' ?
-                    sacRate * (1 + lastPoint.depth / 10) :  // bar/min at depth
-                    sacRate * (1 + lastPoint.depth / 33);   // psi/min at depth
+            let depthFactor = 1;
+            if (currentUnits === 'metric') {
+                depthFactor = 1 + lastPoint.depth / 10;
+                consumptionRate = sacRate * depthFactor;
+            } else {
+                depthFactor = 1 + lastPoint.depth / 33;
+                consumptionRate = sacRate * depthFactor;
             }
             
             // Calculate time to reserve at current depth
@@ -1801,11 +1969,32 @@
                 currentPressure <= turnPressure ? 'warning' : '';
             
             document.getElementById('turnPressure').textContent = formatPressure(turnPressure);
+            document.getElementById('turnPressure').className = 
+                currentPressure <= turnPressure ? 'warning' : '';
+            
             document.getElementById('gasUsed').textContent = formatPressure(gasUsed);
             document.getElementById('consumptionRate').textContent = 
-                consumptionRate > 0 ? formatPressure(consumptionRate) + '/min' : '-- /min';
+                lastPoint.depth > 0 ? formatPressure(consumptionRate) + '/min' : '-- /min';
             document.getElementById('timeToReserve').textContent = 
                 timeToReserve === '--' ? timeToReserve : `${timeToReserve} min`;
+            
+            // Update calculation display (only if elements exist)
+            if (document.getElementById('calc-depth')) {
+                document.getElementById('calc-depth').textContent = formatDepth(lastPoint.depth);
+            }
+            if (document.getElementById('calc-pressure')) {
+                const absolutePressure = currentUnits === 'metric' ? 
+                    `${depthFactor.toFixed(1)} bar` : 
+                    `${depthFactor.toFixed(1)} ATM`;
+                document.getElementById('calc-pressure').textContent = absolutePressure;
+            }
+            if (document.getElementById('calc-sac')) {
+                document.getElementById('calc-sac').textContent = formatPressure(sacRate) + '/min';
+            }
+            if (document.getElementById('calc-consumption')) {
+                document.getElementById('calc-consumption').textContent = 
+                    lastPoint.depth > 0 ? formatPressure(consumptionRate) + '/min' : formatPressure(sacRate) + '/min';
+            }
             
             // Update status if gas is critical
             if (currentPressure <= reservePressure) {
@@ -2120,11 +2309,37 @@
                     
                     // Calculate and display consumption rate at this point
                     const sacRate = parseFloat(document.getElementById('sacRate').value);
-                    const consumptionRate = currentUnits === 'metric' ?
-                        sacRate * (1 + point.depth / 10) :
-                        sacRate * (1 + point.depth / 33);
+                    let depthFactor = 1;
+                    let consumptionRate = 0;
+                    
+                    if (currentUnits === 'metric') {
+                        depthFactor = 1 + point.depth / 10;
+                        consumptionRate = sacRate * depthFactor;
+                    } else {
+                        depthFactor = 1 + point.depth / 33;
+                        consumptionRate = sacRate * depthFactor;
+                    }
+                    
                     document.getElementById('consumptionRate').textContent = 
                         point.depth > 0 ? formatPressure(consumptionRate) + '/min' : '-- /min';
+                    
+                    // Update calculation display (only if elements exist)
+                    if (document.getElementById('calc-depth')) {
+                        document.getElementById('calc-depth').textContent = formatDepth(point.depth);
+                    }
+                    if (document.getElementById('calc-pressure')) {
+                        const absolutePressure = currentUnits === 'metric' ? 
+                            `${depthFactor.toFixed(1)} bar` : 
+                            `${depthFactor.toFixed(1)} ATM`;
+                        document.getElementById('calc-pressure').textContent = absolutePressure;
+                    }
+                    if (document.getElementById('calc-sac')) {
+                        document.getElementById('calc-sac').textContent = formatPressure(sacRate) + '/min';
+                    }
+                    if (document.getElementById('calc-consumption')) {
+                        document.getElementById('calc-consumption').textContent = 
+                            point.depth > 0 ? formatPressure(consumptionRate) + '/min' : formatPressure(sacRate) + '/min';
+                    }
                 }
                 
                 playbackIndex += 2;
@@ -2326,7 +2541,7 @@
             // Set actual canvas size
             const rect = canvas.getBoundingClientRect();
             canvas.width = rect.width;
-            canvas.height = 320;
+            canvas.height = window.innerWidth <= 768 ? 350 : 400;
             
             // Canvas event listeners
             canvas.addEventListener('click', handleCanvasClick);
@@ -2395,7 +2610,7 @@
                 document.getElementById('algorithmPanel').querySelector('h2 span').textContent = '▶';
             }
             
-            // Update initial gas status
+            // Update initial gas status (after DOM is fully loaded)
             updateGasStatus();
             
             // Initialize algorithm display
@@ -2409,7 +2624,7 @@
                 if (!canvas) return;
                 const rect = canvas.getBoundingClientRect();
                 canvas.width = rect.width;
-                canvas.height = 320;
+                canvas.height = window.innerWidth <= 768 ? 350 : 400;
                 drawGrid();
                 if (diveProfile.length > 0) {
                     redraw();
