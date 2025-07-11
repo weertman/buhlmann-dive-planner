@@ -1711,7 +1711,8 @@
                         currentPressure = Math.max(0, currentPressure - gasUsed);
                     } else {
                         // Imperial: SAC is in psi/min at surface
-                        const depthPressure = 1 + (depth / 33); // Absolute pressure in ATM
+                        const depthInFeet = metersToFeet(depth);
+                        const depthPressure = 1 + (depthInFeet / 33); // Absolute pressure in ATM
                         const gasUsed = sacRate * depthPressure * timeStep;
                         currentPressure = Math.max(0, currentPressure - gasUsed);
                     }
